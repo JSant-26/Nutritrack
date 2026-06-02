@@ -1,0 +1,28 @@
+name: nutritrack
+description: "A new Flutter project for smart nutrition."
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Versiones modernas y estables que eliminan el fallback a Kotlin 1.4
+  firebase_core: ^3.10.1
+  cloud_firestore: ^5.6.0
+  firebase_auth: ^5.4.1
+  google_fonts: ^6.2.1
+  flutter_hooks: ^0.21.1
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
