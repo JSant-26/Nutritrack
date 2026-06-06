@@ -89,9 +89,73 @@ def HomeView(page: ft.Page):
     # --- COMPONENTES DINÁMICOS DE LA PESTAÑA INICIO ---
     calorias_texto = ft.Text("", size=36, color=ft.colors.WHITE, weight=ft.FontWeight.BOLD)
     calorias_progress = ft.ProgressBar(value=0, color="#6ee7b7", bgcolor=ft.colors.GREY_700, width=400)
+    lista_comidas_view = ft.ListView(expand=True, spacing=10, padding=10)
+    contenedor_historial = ft.Container(
+        content=ft.Column([
+            ft.Text("Comidas de hoy", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
+            lista_comidas_view
+        ], height=250),
+        bgcolor="#141720", border_radius=15, padding=15, width=450,
+        border=ft.border.all(1, "rgba(255,255,255,0.04)")
+    )
     agua_texto = ft.Text("", size=16, color="#38bdf8", weight=ft.FontWeight.BOLD)
     macro_cards_container = ft.Row(alignment=ft.MainAxisAlignment.CENTER, spacing=15)
 
+    def eliminar_comida(key, calorias_comida, prot_comida, carb_comida, grasas_comida):
+        try:
+            # 1. Eliminar el registro específico de la lista de comidas
+            db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).child("comidas").child(key).remove()
+            
+            # 2. Restar los valores de los totales globales
+            nuevos_totales = {
+                "calorias": consumo_actual["calorias"] - calorias_comida,
+                "proteinas": consumo_actual["proteinas"] - prot_comida,
+                "carbohidratos": consumo_actual["carbohidratos"] - carb_comida,
+                "grasas": consumo_actual["grasas"] - grasas_comida
+            }
+            db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).update(nuevos_totales)
+            
+            # 3. Actualizar la variable local y refrescar la UI
+            for k, v in nuevos_totales.items():
+                consumo_actual[k] = v
+            
+            cargar_lista_comidas()
+            construir_interfaz_inicio()
+            page.update()
+        except Exception as ex:
+            print("Error al eliminar comida:", ex)
+
+    def cargar_lista_comidas():
+            lista_comidas_view.controls.clear()
+            try:
+                comidas_db = db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).child("comidas").get().val()
+                if comidas_db:
+                    for key, comida in comidas_db.items():
+                        # Aseguramos valores por defecto si algún campo falta
+                        c = comida.get('calorias', 0)
+                        p = comida.get('proteinas', 0)
+                        cb = comida.get('carbohidratos', 0)
+                        g = comida.get('grasas', 0)
+                        
+                        lista_comidas_view.controls.append(
+                            ft.ListTile(
+                                leading=ft.Icon(ft.icons.RESTAURANT, color="#6ee7b7"),
+                                title=ft.Text(comida['nombre'], color=ft.colors.WHITE),
+                                subtitle=ft.Text(f"{comida['gramos']}g | {c} kcal", color=ft.colors.GREY_400),
+                                trailing=ft.IconButton(
+                                    ft.icons.DELETE_OUTLINE, 
+                                    icon_color=ft.colors.RED_300,
+                                    # Pasamos los datos necesarios para restar correctamente
+                                    on_click=lambda e, k=key, cal=c, pr=p, cr=cb, gr=g: eliminar_comida(k, cal, pr, cr, gr)
+                                )
+                            )
+                        )
+                else:
+                    lista_comidas_view.controls.append(ft.Text("Aún no hay registros hoy.", color=ft.colors.GREY_600))
+            except Exception as ex:
+                print("Error cargando lista:", ex)
+            page.update()
+            
     def construir_interfaz_inicio():
         calorias_texto.value = f"{consumo_actual['calorias']} / {cal_obj} kcal"
         calorias_progress.value = consumo_actual['calorias'] / cal_obj if cal_obj > 0 else 0
@@ -164,9 +228,12 @@ def HomeView(page: ft.Page):
                 text="Registrar Agua (+250ml)", icon=ft.icons.WATER_DROP, 
                 style=ft.ButtonStyle(bgcolor="#38bdf8", color="#0c0e16"), 
                 on_click=registrar_agua_db, width=450, height=48
-            )
+            ),
+            contenedor_historial
         ]
     )
+        
+    
 
     # --- PESTAÑA 2: REGISTRO DE ALIMENTOS ---
     search_input = ft.TextField(
@@ -227,21 +294,35 @@ def HomeView(page: ft.Page):
                     g_finales = float(input_gramos.value)
                     f = g_finales / 100.0
                     
-                    consumo_actual["calorias"] += int(macros["calorias"] * f)
-                    consumo_actual["proteinas"] += int(macros["proteinas"] * f)
-                    consumo_actual["carbohidratos"] += int(macros["carbohidratos"] * f)
-                    consumo_actual["grasas"] += int(macros["grasas"] * f)
+                    # 1. Crear el objeto de la nueva comida
+                    nueva_comida = {
+                        "nombre": food_name,
+                        "gramos": g_finales,
+                        "calorias": int(macros["calorias"] * f)
+                    }
+                    
+                    # 2. Guardar la comida en el nodo "comidas"
+                    db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).child("comidas").push(nueva_comida)
+                    
+                    # 3. Actualizar los totales (usando update para no borrar lo anterior)
+                    nuevos_totales = {
+                        "calorias": consumo_actual["calorias"] + int(macros["calorias"] * f),
+                        "proteinas": consumo_actual["proteinas"] + int(macros["proteinas"] * f),
+                        "carbohidratos": consumo_actual["carbohidratos"] + int(macros["carbohidratos"] * f),
+                        "grasas": consumo_actual["grasas"] + int(macros["grasas"] * f)
+                    }
+                    db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).update(nuevos_totales)
+                    
+                    # Actualizar consumo_actual local para que la UI refleje el cambio
+                    for k, v in nuevos_totales.items():
+                        consumo_actual[k] = v
 
-                    db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).set(consumo_actual)
-                    
-                    # CIERRE NATIVO CORREGIDO: Cambiamos open a False en lugar de alterar el overlay
                     dialogo_gramos.open = False
-                    
-                    page.snack_bar = ft.SnackBar(ft.Text(f"✓ Guardado: {g_finales}g de {food_name}"))
-                    page.snack_bar.open = True
+                    cargar_lista_comidas() # <-- Recarga la lista
+                    construir_interfaz_inicio() # <-- Actualiza los progresos
                     page.update()
                 except Exception as err:
-                    print(err)
+                    print("Error al guardar:", err)
 
             dialogo_gramos = ft.AlertDialog(
                 title=ft.Text(f"Añadir {macros['nombre']}"),
@@ -348,6 +429,8 @@ def HomeView(page: ft.Page):
             ft.NavigationDestination(icon=ft.icons.ACCOUNT_CIRCLE_ROUNDED, label="Perfil"),
         ]
     )
+
+    cargar_lista_comidas()
 
     return ft.View(
         route="/home",
