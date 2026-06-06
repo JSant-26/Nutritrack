@@ -119,51 +119,7 @@ def HomeView(page: ft.Page):
             ]), bgcolor="#141720", padding=15, border_radius=10, width=140),
         ]
 
-        # Creamos un contenedor (ListView) que se actualizará dinámicamente
-        lista_comidas_view = ft.ListView(
-            expand=True,
-            spacing=10,
-            padding=10
-        )
-        
-        # Un contenedor envoltorio para darle estilo
-        contenedor_historial = ft.Container(
-            content=ft.Column([
-                ft.Text("Comidas de hoy", size=18, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
-                lista_comidas_view
-            ], height=250), # Altura fija para que no crezca infinitamente
-            bgcolor="#141720",
-            border_radius=15,
-            padding=15,
-            width=450
-        )
-
     construir_interfaz_inicio()
-
-    def cargar_lista_comidas():
-        lista_comidas_view.controls.clear()
-        try:
-            # Obtenemos el nodo comidas del día actual
-            comidas_db = db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).child("comidas").get().val()
-            
-            if comidas_db:
-                for key, comida in comidas_db.items():
-                    # Creamos una fila por cada alimento
-                    lista_comidas_view.controls.append(
-                        ft.ListTile(
-                            leading=ft.Icon(ft.icons.RESTAURANT, color="#6ee7b7"),
-                            title=ft.Text(comida['nombre'], color=ft.colors.WHITE),
-                            subtitle=ft.Text(f"{comida['gramos']}g | {comida['calorias']} kcal", color=ft.colors.GREY_400),
-                            # El ícono de basura para borrar
-                            trailing=ft.IconButton(ft.icons.DELETE_OUTLINE, icon_color=ft.colors.RED_300)
-                        )
-                    )
-            else:
-                lista_comidas_view.controls.append(ft.Text("Aún no has registrado nada hoy.", color=ft.colors.GREY_600))
-        except Exception as ex:
-            print("Error cargando lista:", ex)
-        
-        page.update()
 
     def registrar_agua_db(e):
         consumo_actual["agua"] += 250
@@ -271,32 +227,21 @@ def HomeView(page: ft.Page):
                     g_finales = float(input_gramos.value)
                     f = g_finales / 100.0
                     
-                    # 1. Creamos el objeto del alimento
-                    nuevo_alimento = {
-                        "nombre": food_name,
-                        "gramos": g_finales,
-                        "calorias": int(macros["calorias"] * f),
-                        "timestamp": datetime.now().strftime("%H:%M:%S")
-                    }
-
-                    # 2. Sumamos al total actual (como ya hacías)
-                    consumo_actual["calorias"] += nuevo_alimento["calorias"]
+                    consumo_actual["calorias"] += int(macros["calorias"] * f)
                     consumo_actual["proteinas"] += int(macros["proteinas"] * f)
                     consumo_actual["carbohidratos"] += int(macros["carbohidratos"] * f)
                     consumo_actual["grasas"] += int(macros["grasas"] * f)
 
-                    # 3. Guardamos en Firebase: primero el total y luego el detalle
-                    db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).update(consumo_actual)
-                    db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).child("comidas").push(nuevo_alimento)
+                    db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).set(consumo_actual)
                     
+                    # CIERRE NATIVO CORREGIDO: Cambiamos open a False en lugar de alterar el overlay
                     dialogo_gramos.open = False
                     
-                    # 4. Refrescamos la UI (luego conectaremos esto con la lista visual)
-                    page.snack_bar = ft.SnackBar(ft.Text(f"✓ {food_name} añadido"))
+                    page.snack_bar = ft.SnackBar(ft.Text(f"✓ Guardado: {g_finales}g de {food_name}"))
                     page.snack_bar.open = True
                     page.update()
                 except Exception as err:
-                    print("Error al guardar:", err)
+                    print(err)
 
             dialogo_gramos = ft.AlertDialog(
                 title=ft.Text(f"Añadir {macros['nombre']}"),
