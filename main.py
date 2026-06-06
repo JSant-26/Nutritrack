@@ -1,54 +1,35 @@
 import flet as ft
+from src.views.login_view import LoginView
+from src.views.survey_view import SurveyView  
+from src.views.home_view import HomeView
 
 def main(page: ft.Page):
-    page.title = "Nutritrack - Estable"
-    page.theme_mode = ft.ThemeMode.DARK
-    
-    # Restablecemos las dimensiones del teléfono que ahora sí van a funcionar
-    page.window.width = 400
-    page.window.height = 800
-    page.window.resizable = False
-    
-    page.vertical_alignment = ft.MainAxisAlignment.CENTER
-    page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+    page.title = "Nutritrack"
 
-    email_input = ft.TextField(
-        label="Correo Electrónico",
-        border_color=ft.colors.GREEN_400,
-        focused_border_color=ft.colors.GREEN_ACCENT_400,
-        width=300
-    )
+# --- AJUSTES DE PANTALLA PROFESIONALES ---
+    page.window_width = 1000        # Ancho inicial cómodo
+    page.window_height = 750       # Alto inicial para que quepa todo
+    page.window_min_width = 600    # Ancho mínimo permitido al estirar
+    page.window_min_height = 550   # Alto mínimo permitido
+    page.scroll = ft.ScrollMode.AUTO # Activa barra de scroll automática si la pantalla se encoge
     
-    password_input = ft.TextField(
-        label="Contraseña",
-        password=True,
-        can_reveal_password=True,
-        border_color=ft.colors.GREEN_400,
-        focused_border_color=ft.colors.GREEN_ACCENT_400,
-        width=300
-    )
+    # Este diccionario guardará el ID del usuario de Firebase de forma global
+    page.user_data = {"id": None}
 
-    page.add(
-        ft.Column(
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            alignment=ft.MainAxisAlignment.CENTER,
-            spacing=20,
-            controls=[
-                ft.Icon(ft.icons.TRACK_CHANGES, size=60, color=ft.colors.GREEN_ACCENT_400),
-                ft.Text("NUTRITRACK", size=28, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
-                email_input,
-                password_input,
-                ft.ElevatedButton(
-                    text="Iniciar Sesión", 
-                    width=200,
-                    style=ft.ButtonStyle(
-                        bgcolor=ft.colors.GREEN_ACCENT_700,
-                        color=ft.colors.WHITE
-                    )
-                )
-            ]
-        )
-    )
+    # Manejador de cambios de ruta
+    def route_change(route):
+        page.views.clear()
+        
+        if page.route == "/" or page.route == "/login":
+            page.views.append(LoginView(page))
+        elif page.route == "/survey":
+            page.views.append(SurveyView(page))
+        elif page.route == "/home": 
+            page.views.append(HomeView(page))
+        page.update()
+
+    page.on_route_change = route_change
+    page.go(page.route)
 
 if __name__ == "__main__":
     ft.app(target=main)
