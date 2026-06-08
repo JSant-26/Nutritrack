@@ -5,6 +5,9 @@ import threading
 from datetime import datetime
 from dotenv import load_dotenv
 from src.services.food_api import FatSecretAPI
+from src.components.navbar import crear_navbar
+from src.views.registro_view import RegistroView
+from src.views.perfil_view import PerfilView
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '../../.env'))
 
@@ -75,12 +78,33 @@ def HomeView(page: ft.Page):
     def cargar_consumo_desde_db():
         try:
             consumo_db = db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).get().val()
+            print("[DEBUG] consumo_db raw:", consumo_db)
             if consumo_db:
-                consumo_actual["calorias"] = int(consumo_db.get("calorias", 0))
-                consumo_actual["proteinas"] = int(consumo_db.get("proteinas", 0))
-                consumo_actual["carbohidratos"] = int(consumo_db.get("carbohidratos", 0))
-                consumo_actual["grasas"] = int(consumo_db.get("grasas", 0))
-                consumo_actual["agua"] = int(consumo_db.get("agua", 0))
+                # Sumar todas las comidas registradas para obtener totales fiables
+                comidas = consumo_db.get("comidas", {}) or {}
+                total_cal = 0.0
+                total_p = 0.0
+                total_c = 0.0
+                total_g = 0.0
+                for key, comida in (comidas.items() if isinstance(comidas, dict) else []):
+                    try:
+                        total_cal += float(comida.get("calorias", 0) or 0)
+                    except Exception:
+                        pass
+                    macros = comida.get("macros", {}) or {}
+                    try:
+                        total_p += float(macros.get("P", 0) or 0)
+                        total_c += float(macros.get("C", 0) or 0)
+                        total_g += float(macros.get("G", 0) or 0)
+                    except Exception:
+                        pass
+
+                consumo_actual["calorias"] = int(round(total_cal))
+                consumo_actual["proteinas"] = int(round(total_p))
+                consumo_actual["carbohidratos"] = int(round(total_c))
+                consumo_actual["grasas"] = int(round(total_g))
+                consumo_actual["agua"] = int(consumo_db.get("agua", 0) or 0)
+                print("[DEBUG] consumo_actual after read:", consumo_actual)
         except Exception as ex:
             print("Error al cargar consumo diario:", str(ex))
 
@@ -232,212 +256,79 @@ def HomeView(page: ft.Page):
             contenedor_historial
         ]
     )
-        
+
+    # Definición completa de vista_inicio
+    vista_inicio = ft.Column(
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER, 
+        spacing=25,
+        controls=[
+            ft.Row(
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN, 
+                width=450,
+                controls=[
+                    ft.Column([
+                        ft.Text(f"¡Hola, {nombre_usuario}! 👋", size=24, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
+                        ft.Text(f"Meta: {objetivo_usuario} | {peso_actual} kg", size=14, color="#6ee7b7"),
+                    ]),
+                    ft.IconButton(
+                        ft.icons.LOGOUT_ROUNDED, 
+                        icon_color=ft.colors.RED_ACCENT_400, 
+                        on_click=lambda _: [page.user_data.clear(), page.go("/")]
+                    )
+                ]
+            ),
+            calorias_card,
+            macro_cards_container,
+            ft.Divider(height=10, color="rgba(255,255,255,0.05)"),
+            ft.ElevatedButton(
+                text="Registrar Agua (+250ml)", 
+                icon=ft.icons.WATER_DROP, 
+                style=ft.ButtonStyle(bgcolor="#38bdf8", color="#0c0e16"), 
+                on_click=registrar_agua_db, 
+                width=450, 
+                height=48
+            ),
+            contenedor_historial
+        ]
+    )
+
+    vista_registro = RegistroView(page) 
+    vista_perfil = PerfilView(page)
     
 
-    # --- PESTAÑA 2: REGISTRO DE ALIMENTOS ---
-    search_input = ft.TextField(
-        label="Buscar alimento en internet...", expand=True,
-        border_color="rgba(255,255,255,0.1)", focused_border_color="#6ee7b7"
-    )
-    lista_resultados = ft.Column(spacing=10, horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
-    indicador_carga = ft.ProgressRing(visible=False, width=22, height=22, color="#6ee7b7")
-
-    def abrir_dialogo_porciones(food_id, food_name):
-        indicador_carga.visible = True
-        page.update()
-
-        def tarea_hilo_api():
-            try:
-                macros = api_alimentos.obtener_macros_alimento(str(food_id))
-            except Exception as ex:
-                print(ex)
-                macros = None
-
-            indicador_carga.visible = False
-
-            if not macros:
-                page.snack_bar = ft.SnackBar(ft.Text("Error al obtener macros de la API."))
-                page.snack_bar.open = True
-                page.update()
-                return
-
-            input_gramos = ft.TextField(label="Gramos", value="100", width=120, focused_border_color="#6ee7b7")
-            txt_calorias = ft.Text(f"Calorías: {macros['calorias']} kcal", weight=ft.FontWeight.BOLD, color="#6ee7b7")
-            txt_p = ft.Text(f"P: {macros['proteinas']}g", color="#6ee7b7")
-            txt_c = ft.Text(f"C: {macros['carbohidratos']}g", color="#38bdf8")
-            txt_g = ft.Text(f"G: {macros['grasas']}g", color="#fbbf24")
-
-            def cambiar_gramos_reactivo(e):
-                try:
-                    g = float(input_gramos.value) if input_gramos.value else 0.0
-                    f = g / 100.0
-                    txt_calorias.value = f"Calorías: {round(macros['calorias']*f, 1)} kcal"
-                    txt_p.value = f"P: {round(macros['proteinas']*f, 1)}g"
-                    txt_c.value = f"C: {round(macros['carbohidratos']*f, 1)}g"
-                    txt_g.value = f"G: {round(macros['grasas']*f, 1)}g"
-                    page.update()
-                except:
-                    pass
-
-            input_gramos.on_change = cambiar_gramos_reactivo
-
-            # Declaramos la referencia del diálogo vacía primero para usarla internamente
-            dialogo_gramos = None
-
-            def cerrar_dialogo_seguro(e):
-                dialogo_gramos.open = False
-                page.update()
-
-            def confirmar_adicion(e):
-                try:
-                    g_finales = float(input_gramos.value)
-                    f = g_finales / 100.0
-                    
-                    # 1. Crear el objeto de la nueva comida
-                    nueva_comida = {
-                        "nombre": food_name,
-                        "gramos": g_finales,
-                        "calorias": int(macros["calorias"] * f)
-                    }
-                    
-                    # 2. Guardar la comida en el nodo "comidas"
-                    db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).child("comidas").push(nueva_comida)
-                    
-                    # 3. Actualizar los totales (usando update para no borrar lo anterior)
-                    nuevos_totales = {
-                        "calorias": consumo_actual["calorias"] + int(macros["calorias"] * f),
-                        "proteinas": consumo_actual["proteinas"] + int(macros["proteinas"] * f),
-                        "carbohidratos": consumo_actual["carbohidratos"] + int(macros["carbohidratos"] * f),
-                        "grasas": consumo_actual["grasas"] + int(macros["grasas"] * f)
-                    }
-                    db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).update(nuevos_totales)
-                    
-                    # Actualizar consumo_actual local para que la UI refleje el cambio
-                    for k, v in nuevos_totales.items():
-                        consumo_actual[k] = v
-
-                    dialogo_gramos.open = False
-                    cargar_lista_comidas() # <-- Recarga la lista
-                    construir_interfaz_inicio() # <-- Actualiza los progresos
-                    page.update()
-                except Exception as err:
-                    print("Error al guardar:", err)
-
-            dialogo_gramos = ft.AlertDialog(
-                title=ft.Text(f"Añadir {macros['nombre']}"),
-                content=ft.Column([
-                    ft.Text(f"Base: {macros['porcion_texto']}", italic=True, size=12, color=ft.colors.GREY_400),
-                    ft.Row([input_gramos, ft.Text("g", size=16, weight=ft.FontWeight.BOLD)], alignment=ft.MainAxisAlignment.CENTER),
-                    ft.Divider(color="rgba(255,255,255,0.1)"),
-                    txt_calorias,
-                    ft.Row([txt_p, txt_c, txt_g], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-                ], tight=True, spacing=12),
-                actions=[
-                    ft.TextButton("Cancelar", on_click=cerrar_dialogo_seguro),
-                    ft.ElevatedButton("Agregar", bgcolor="#6ee7b7", color="#0c0e16", on_click=confirmar_adicion)
-                ]
-            )
-            
-            # Asignamos al diálogo de la página de manera limpia
-            page.dialog = dialogo_gramos
-            dialogo_gramos.open = True
-            page.update()
-
-        threading.Thread(target=tarea_hilo_api).start()
-
-    def ejecutar_busqueda(e):
-        if not search_input.value.strip(): return
-        indicador_carga.visible = True
-        lista_resultados.controls.clear()
-        page.update()
-
-        def thread_buscar():
-            productos = api_alimentos.buscar_alimento(search_input.value)
-            indicador_carga.visible = False
-            if not productos:
-                lista_resultados.controls.append(ft.Text("No se encontraron alimentos.", color="#fbbf24", text_align=ft.TextAlign.CENTER))
-            else:
-                for p in productos:
-                    lista_resultados.controls.append(
-                        ft.Container(
-                            content=ft.ListTile(
-                                title=ft.Text(p["nombre"], weight=ft.FontWeight.BOLD),
-                                subtitle=ft.Text(f"{p['marca']} - {p['descripcion']}", size=11, color=ft.colors.GREY_400),
-                                trailing=ft.IconButton(ft.icons.ADD_CIRCLE_OUTLINE, icon_color="#6ee7b7", on_click=lambda _, fid=p["id"], fname=p["nombre"]: abrir_dialogo_porciones(fid, fname))
-                            ),
-                            bgcolor="#141720", border_radius=12, padding=2,
-                            border=ft.border.all(1, "rgba(255,255,255,0.03)")
-                        )
-                    )
-            page.update()
-            
-        threading.Thread(target=thread_buscar).start()
-
-    vista_registro = ft.Column(
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=15,
-        controls=[
-            ft.Text("Registro de Comidas", size=22, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
-            ft.Row([search_input, ft.IconButton(ft.icons.SEARCH, icon_color="#6ee7b7", height=48, on_click=ejecutar_busqueda), indicador_carga], alignment=ft.MainAxisAlignment.CENTER),
-            ft.Divider(color="rgba(255,255,255,0.05)"),
-            lista_resultados
-        ]
-    )
-
-    # --- PESTAÑA 3: PERFIL ---
-    vista_perfil = ft.Column(
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=20,
-        controls=[
-            ft.Text("Mi Perfil", size=22, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE),
-            ft.Container(
-                content=ft.Column([
-                    ft.ListTile(leading=ft.Icon(ft.icons.PERSON, color="#6ee7b7"), title=ft.Text("Usuario"), subtitle=ft.Text(nombre_usuario)),
-                    ft.ListTile(leading=ft.Icon(ft.icons.FITNESS_CENTER, color="#38bdf8"), title=ft.Text("Meta Actual"), subtitle=ft.Text(objetivo_usuario)),
-                    ft.ListTile(leading=ft.Icon(ft.icons.SPEED, color="#fbbf24"), title=ft.Text("Peso registrado"), subtitle=ft.Text(f"{peso_actual} kg - {altura_actual} cm")),
-                ]),
-                bgcolor="#141720", padding=10, border_radius=15, width=450,
-                border=ft.border.all(1, "rgba(255,255,255,0.04)")
-            )
-        ]
-    )
-
-    # --- NAVEGACIÓN ---
     contenedor_central = ft.Column(controls=[vista_inicio], scroll=ft.ScrollMode.AUTO, expand=True)
 
     def cambiar_pestana(e):
         idx = e.control.selected_index
+        
+        # 1. IMPORTANTE: Limpiamos cualquier rastro de diálogos anteriores
+        page.dialog = None
+        
+        # 2. Limpiamos el contenedor central
         contenedor_central.controls.clear()
         
+        # 3. Insertamos la vista fresca
         if idx == 0:
             cargar_consumo_desde_db()
             construir_interfaz_inicio()
             contenedor_central.controls.append(vista_inicio)
         elif idx == 1:
-            contenedor_central.controls.append(vista_registro)
+            contenedor_central.controls.append(RegistroView(page))
         elif idx == 2:
-            contenedor_central.controls.append(vista_perfil)
+            contenedor_central.controls.append(PerfilView(page))
         
+        # 4. Una sola llamada al final
         page.update()
 
-    nav_bar = ft.NavigationBar(
-        selected_index=0,
-        bgcolor="#0c0e16",
-        on_change=cambiar_pestana,
-        destinations=[
-            ft.NavigationDestination(icon=ft.icons.HOME_ROUNDED, label="Inicio"),
-            ft.NavigationDestination(icon=ft.icons.FASTFOOD_ROUNDED, label="Registrar"),
-            ft.NavigationDestination(icon=ft.icons.ACCOUNT_CIRCLE_ROUNDED, label="Perfil"),
-        ]
-    )
-
     cargar_lista_comidas()
+    construir_interfaz_inicio()
 
     return ft.View(
         route="/home",
-        navigation_bar=nav_bar,
+        navigation_bar=crear_navbar(page, selected_index=0),
         controls=[
             ft.Container(
-                content=contenedor_central,
+                content=contenedor_central, # Ahora Python ya sabe qué es esto
                 padding=20,
                 expand=True
             )

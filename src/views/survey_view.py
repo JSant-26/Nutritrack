@@ -15,6 +15,7 @@ firebase_config = {
     "appId": os.getenv("FIREBASE_APP_ID")
 }
 
+# Inicialización de Firebase
 db = pyrebase.initialize_app(firebase_config).database()
 
 def SurveyView(page: ft.Page):
@@ -45,7 +46,7 @@ def SurveyView(page: ft.Page):
             mostrar_mensaje("Por favor, llena todos los campos.")
             return
 
-        # Obtenemos el ID del usuario logueado en la sesión anterior
+        # Obtenemos el ID del usuario logueado usando el objeto page.user_data definido en main.py
         user_id = page.user_data.get("id", "usuario_anonimo")
 
         datos_nutricionales = {
@@ -60,6 +61,7 @@ def SurveyView(page: ft.Page):
             db.child("usuarios").child(user_id).child("perfil").set(datos_nutricionales)
             mostrar_mensaje("¡Perfil guardado con éxito en Firebase!")
             
+            # Redirigimos al Home después de guardar
             page.go("/home") 
             
         except Exception as ex:

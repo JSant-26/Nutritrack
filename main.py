@@ -1,35 +1,55 @@
 import flet as ft
 from src.views.login_view import LoginView
-from src.views.survey_view import SurveyView  
 from src.views.home_view import HomeView
+from src.views.registro_view import RegistroView
+from src.views.perfil_view import PerfilView
+from src.views.survey_view import SurveyView
+from src.components.navbar import crear_navbar
 
 def main(page: ft.Page):
     page.title = "Nutritrack"
+    page.theme_mode = ft.ThemeMode.DARK
+    page.window.width = 450
+    page.window.height = 800
+    page.user_data = {"id": None, "email": None}
 
-# --- AJUSTES DE PANTALLA PROFESIONALES ---
-    page.window_width = 1000        # Ancho inicial cómodo
-    page.window_height = 750       # Alto inicial para que quepa todo
-    page.window_min_width = 600    # Ancho mínimo permitido al estirar
-    page.window_min_height = 550   # Alto mínimo permitido
-    page.scroll = ft.ScrollMode.AUTO # Activa barra de scroll automática si la pantalla se encoge
-    
-    # Este diccionario guardará el ID del usuario de Firebase de forma global
-    page.user_data = {"id": None}
-
-    # Manejador de cambios de ruta
     def route_change(route):
         page.views.clear()
         
-        if page.route == "/" or page.route == "/login":
+        if page.route == "/":
             page.views.append(LoginView(page))
+        elif page.route == "/home":
+            # HomeView ya devuelve el ft.View completo, solo añade ese objeto
+            page.views.append(HomeView(page))
+        elif page.route == "/registro":
+            # Añadir la vista de registro embebida dentro de un ft.View
+            page.views.append(
+                ft.View(
+                    route="/registro",
+                    navigation_bar=crear_navbar(page, selected_index=1),
+                    controls=[
+                        ft.Container(content=RegistroView(page), padding=20, expand=True)
+                    ]
+                )
+            )
+        elif page.route == "/perfil":
+            # Vista de perfil con navbar
+            page.views.append(
+                ft.View(
+                    route="/perfil",
+                    navigation_bar=crear_navbar(page, selected_index=2),
+                    controls=[
+                        ft.Container(content=PerfilView(page), padding=20, expand=True)
+                    ]
+                )
+            )
         elif page.route == "/survey":
             page.views.append(SurveyView(page))
-        elif page.route == "/home": 
-            page.views.append(HomeView(page))
+        
         page.update()
 
     page.on_route_change = route_change
-    page.go(page.route)
+    page.go("/") 
 
 if __name__ == "__main__":
     ft.app(target=main)
