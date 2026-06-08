@@ -51,6 +51,8 @@ def HomeView(page: ft.Page):
 
     consumo_actual = {"calorias": 0, "proteinas": 0, "carbohidratos": 0, "grasas": 0, "agua": 0}
 
+    recetas_fav_db = []
+
     def cargar_consumo_desde_db():
         try:
             consumo_db = db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).get().val()
@@ -81,6 +83,8 @@ def HomeView(page: ft.Page):
                 consumo_actual["agua"] = int(consumo_db.get("agua", 0) or 0)
         except Exception as ex:
             print("Error al cargar consumo diario:", str(ex))
+
+    # favoritas se gestionan en la vista Registro
 
     cargar_consumo_desde_db()
 
@@ -180,6 +184,54 @@ def HomeView(page: ft.Page):
                 ft.ProgressBar(value=g_prog, color="#fbbf24", bgcolor=ft.colors.GREY_800, width=120)
             ]), bgcolor="#141720", padding=15, border_radius=10, width=140),
         ]
+
+        # Construir sección de recetas favoritas (si existen)
+        fav_controls = []
+        if recetas_fav_db:
+            for key, receta in recetas_fav_db:
+                titulo = receta.get("titulo") or receta.get("nombre") or "Receta"
+                desc = receta.get("desc", "")
+
+                def reg_from_fav(e, receta=receta):
+                    g = 250
+                    cal = receta.get("calorias", 0)
+                    macros = receta.get("macros", {}) or {}
+                    factor = g / 100.0 if g and cal else (g / 100.0 if g else 0)
+                    datos = {
+                        "nombre": receta.get("titulo", receta.get("nombre")),
+                        "gramos": g,
+                        "calorias": int(round(cal * factor)) if cal else 0,
+                        "proteinas": int(round(macros.get("P", 0) * factor)) if macros else 0,
+                        "carbohidratos": int(round(macros.get("C", 0) * factor)) if macros else 0,
+                        "grasas": int(round(macros.get("G", 0) * factor)) if macros else 0,
+                        "origen": "favorita"
+                    }
+                    try:
+                        db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).child("comidas").push(datos)
+                        cargar_consumo_desde_db()
+                        cargar_lista_comidas()
+                        page.update()
+                    except Exception as ex:
+                        print("Error registrando desde favorita:", ex)
+
+                def eliminar_fav(e, key=key):
+                    try:
+                        db.child("usuarios").child(user_id).child("recetas_favoritas").child(key).remove()
+                        cargar_favoritas()
+                        page.update()
+                    except Exception as ex:
+                        print("Error eliminando favorita:", ex)
+
+                fav_controls.append(
+                    ft.ListTile(
+                        leading=ft.Icon(ft.icons.RESTAURANT, color="#6ee7b7"),
+                        title=ft.Text(titulo, color=ft.colors.WHITE),
+                        subtitle=ft.Text(desc, color=ft.colors.GREY_400),
+                        trailing=ft.Row([ft.ElevatedButton("Agregar", on_click=reg_from_fav, height=36), ft.IconButton(ft.icons.DELETE_OUTLINE, icon_color=ft.colors.RED_300, on_click=eliminar_fav)], spacing=6)
+                    )
+                )
+
+        # favoritas ahora se muestran en la pestaña Registrar
 
     construir_interfaz_inicio()
 

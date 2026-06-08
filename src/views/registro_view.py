@@ -18,6 +18,86 @@ def RegistroView(page: ft.Page):
         "Grasas": "aceite oliva aguacate natural"
     }
 
+    # Recetas favoritas del usuario (se muestran en esta pestaña)
+    recetas_fav_db = []
+    # Favoritas: fixed-width card to avoid forcing the parent column to expand
+    fav_container = ft.Container(content=ft.Column([], spacing=8), bgcolor="#141720", padding=12, border_radius=12, width=450, border=ft.border.all(1, "rgba(255,255,255,0.04)"))
+
+    def cargar_favoritas():
+        nonlocal recetas_fav_db
+        recetas_fav_db = []
+        try:
+            favs = db.child("usuarios").child(user_id).child("recetas_favoritas").get().val() or {}
+            for k, v in favs.items():
+                recetas_fav_db.append((k, v))
+        except Exception as ex:
+            print("Error cargando favoritas:", ex)
+
+        # Construir controles para el contenedor
+        fav_controls = []
+        if recetas_fav_db:
+            for key, receta in recetas_fav_db:
+                # Normalizar texto (eliminar saltos de línea o estructura inesperada)
+                raw_titulo = receta.get("titulo") or receta.get("nombre") or "Receta"
+                titulo = " ".join(str(raw_titulo).replace('\r', ' ').replace('\n', ' ').split())
+                raw_desc = receta.get("desc", "")
+                desc = " ".join(str(raw_desc).replace('\r', ' ').replace('\n', ' ').split())
+
+                def reg_from_fav(e, receta=receta):
+                    g = 250
+                    cal = receta.get("calorias", 0)
+                    macros = receta.get("macros", {}) or {}
+                    factor = g / 100.0 if g and cal else (g / 100.0 if g else 0)
+                    datos = {
+                        "nombre": receta.get("titulo", receta.get("nombre")),
+                        "gramos": g,
+                        "calorias": int(round(cal * factor)) if cal else 0,
+                        "proteinas": int(round(macros.get("P", 0) * factor)) if macros else 0,
+                        "carbohidratos": int(round(macros.get("C", 0) * factor)) if macros else 0,
+                        "grasas": int(round(macros.get("G", 0) * factor)) if macros else 0,
+                        "origen": "favorita",
+                        "fecha": fecha_hoy
+                    }
+                    try:
+                        db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).child("comidas").push(datos)
+                        page.snack_bar = ft.SnackBar(ft.Text("Registro agregado desde favoritas"))
+                        page.snack_bar.open = True
+                        page.update()
+                    except Exception as ex:
+                        print("Error registrando desde favorita:", ex)
+
+                def eliminar_fav(e, key=key):
+                    try:
+                        db.child("usuarios").child(user_id).child("recetas_favoritas").child(key).remove()
+                        cargar_favoritas()
+                        page.snack_bar = ft.SnackBar(ft.Text("Favorita eliminada"))
+                        page.snack_bar.open = True
+                        page.update()
+                    except Exception as ex:
+                        print("Error eliminando favorita:", ex)
+
+                # Use a responsive Row so title doesn't get forced to a tiny column
+                fav_controls.append(
+                    ft.Container(
+                        content=ft.Row([
+                            ft.Container(ft.Icon(ft.icons.RESTAURANT, color="#6ee7b7"), padding=8),
+                            ft.Column([ft.Text(titulo, color=ft.colors.WHITE, weight=ft.FontWeight.BOLD), ft.Text(desc, color=ft.colors.GREY_400)], expand=True),
+                            ft.Row([ft.ElevatedButton("Registrar", on_click=reg_from_fav, height=36), ft.IconButton(ft.icons.DELETE_OUTLINE, icon_color=ft.colors.RED_300, on_click=eliminar_fav)], spacing=6)
+                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN), padding=8, border_radius=8, bgcolor="#0f1114"
+                    )
+                )
+
+        if fav_controls:
+            fav_container.content = ft.Column([ft.Text("Recetas Favoritas", size=16, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE)] + fav_controls, spacing=8)
+        else:
+            fav_container.content = ft.Column([ft.Text("Recetas Favoritas", size=16, weight=ft.FontWeight.BOLD, color=ft.colors.WHITE), ft.Text("Aún no hay recetas favoritas.", color=ft.colors.GREY_600)], spacing=8)
+
+    # cargar inicialmente
+    try:
+        cargar_favoritas()
+    except Exception:
+        pass
+
     def abrir_modal(nombre, desc):
         # --- EXTRACCIÓN DE DATOS DE LA DESCRIPCIÓN ---
         # "Por 100g - Calorías: 147kcal | Grasas: 9,94g | Carbohidratos: 0,77g | Proteínas: 12,58g"
@@ -295,7 +375,9 @@ def RegistroView(page: ft.Page):
                     ft.ElevatedButton("Grasas", on_click=aplicar_filtro)
                 ], scroll=ft.ScrollMode.AUTO),
                 indicador_carga,
-                lista_resultados
+                lista_resultados,
+                ft.Container(height=12),
+                fav_container
             ], 
             
         )
