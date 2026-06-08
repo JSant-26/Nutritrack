@@ -4,6 +4,7 @@ from src.views.home_view import HomeView
 from src.views.registro_view import RegistroView
 from src.views.perfil_view import PerfilView
 from src.views.survey_view import SurveyView
+from src.views.plan_view import PlanView
 from src.components.navbar import crear_navbar
 
 def main(page: ft.Page):
@@ -22,24 +23,44 @@ def main(page: ft.Page):
             # HomeView ya devuelve el ft.View completo, solo añade ese objeto
             page.views.append(HomeView(page))
         elif page.route == "/registro":
-            # Añadir la vista de registro embebida dentro de un ft.View
             page.views.append(
                 ft.View(
                     route="/registro",
                     navigation_bar=crear_navbar(page, selected_index=1),
                     controls=[
-                        ft.Container(content=RegistroView(page), padding=20, expand=True)
+                        ft.Container(
+                            content=ft.Column(controls=[RegistroView(page)], scroll=ft.ScrollMode.AUTO, expand=True),
+                            padding=20,
+                            expand=True
+                        )
+                    ]
+                )
+            )
+        elif page.route == "/plan":
+            page.views.append(
+                ft.View(
+                    route="/plan",
+                    navigation_bar=crear_navbar(page, selected_index=2),
+                    controls=[
+                        ft.Container(
+                            content=ft.Column(controls=[PlanView(page)], scroll=ft.ScrollMode.AUTO, expand=True),
+                            padding=20,
+                            expand=True
+                        )
                     ]
                 )
             )
         elif page.route == "/perfil":
-            # Vista de perfil con navbar
             page.views.append(
                 ft.View(
                     route="/perfil",
-                    navigation_bar=crear_navbar(page, selected_index=2),
+                    navigation_bar=crear_navbar(page, selected_index=3),
                     controls=[
-                        ft.Container(content=PerfilView(page), padding=20, expand=True)
+                        ft.Container(
+                            content=ft.Column(controls=[PerfilView(page)], scroll=ft.ScrollMode.AUTO, expand=True),
+                            padding=20,
+                            expand=True
+                        )
                     ]
                 )
             )

@@ -8,6 +8,7 @@ from src.services.food_api import FatSecretAPI
 from src.components.navbar import crear_navbar
 from src.views.registro_view import RegistroView
 from src.views.perfil_view import PerfilView
+from src.utils.nutrition import calcular_requerimientos
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '../../.env'))
 
@@ -24,32 +25,7 @@ firebase_config = {
 db = pyrebase.initialize_app(firebase_config).database()
 api_alimentos = FatSecretAPI()
 
-def calcular_requerimientos(peso_kg, altura_cm, edad_anios, objetivo):
-    try:
-        peso = float(peso_kg)
-        altura = float(altura_cm)
-        if altura < 3.0:
-            altura = altura * 100
-        edad = int(edad_anios)
-    except:
-        return 2000, 130, 220, 65 
-
-    tmb = (10 * peso) + (6.25 * altura) - (5 * edad) + 5
-    calorias_mantenimiento = tmb * 1.375
-
-    if "ganar" in objetivo.lower() or "muscular" in objetivo.lower():
-        calorias_objetivo = calorias_mantenimiento + 400
-    elif "perder" in objetivo.lower() or "peso" in objetivo.lower():
-        calorias_objetivo = calorias_mantenimiento - 400
-    else:
-        calorias_objetivo = calorias_mantenimiento
-
-    proteinas = int(peso * 2)
-    grasas = int(peso * 1)
-    calorias_restantes = calorias_objetivo - (proteinas * 4) - (grasas * 9)
-    carbohidratos = int(calorias_restantes / 4)
-
-    return int(calorias_objetivo), proteinas, carbohidratos, grasas
+# calcular_requerimientos moved to src/utils/nutrition.py
 
 
 def HomeView(page: ft.Page):
@@ -78,7 +54,6 @@ def HomeView(page: ft.Page):
     def cargar_consumo_desde_db():
         try:
             consumo_db = db.child("usuarios").child(user_id).child("consumo_diario").child(fecha_hoy).get().val()
-            print("[DEBUG] consumo_db raw:", consumo_db)
             if consumo_db:
                 # Sumar todas las comidas registradas para obtener totales fiables
                 comidas = consumo_db.get("comidas", {}) or {}
@@ -104,7 +79,6 @@ def HomeView(page: ft.Page):
                 consumo_actual["carbohidratos"] = int(round(total_c))
                 consumo_actual["grasas"] = int(round(total_g))
                 consumo_actual["agua"] = int(consumo_db.get("agua", 0) or 0)
-                print("[DEBUG] consumo_actual after read:", consumo_actual)
         except Exception as ex:
             print("Error al cargar consumo diario:", str(ex))
 
@@ -315,6 +289,9 @@ def HomeView(page: ft.Page):
         elif idx == 1:
             contenedor_central.controls.append(RegistroView(page))
         elif idx == 2:
+            from src.views.plan_view import PlanView
+            contenedor_central.controls.append(PlanView(page))
+        elif idx == 3:
             contenedor_central.controls.append(PerfilView(page))
         
         # 4. Una sola llamada al final

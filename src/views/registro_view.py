@@ -103,26 +103,24 @@ def RegistroView(page: ft.Page):
             # Lectura de verificación y notificación al usuario
             try:
                 snapshot = comidas_ref.get().val()
-                print("[DB DEBUG] consumo_diario after write:", snapshot)
                 page.snack_bar = ft.SnackBar(ft.Text("Comida añadida correctamente."), open=True)
-            except Exception as ex:
-                print("[DB DEBUG] error leyendo después de escribir:", ex)
+            except Exception:
                 page.snack_bar = ft.SnackBar(ft.Text("La comida pudo no haberse guardado."), open=True)
             page.update()
             page.dialog.open = False
 
         # --- DISEÑO DE LA VENTANA ---
+        # Dialog ajustable al contenido (sin ancho fijo)
         page.dialog = ft.AlertDialog(
             bgcolor="#141720",
             shape=ft.RoundedRectangleBorder(radius=20),
             content=ft.Container(
-                width=300,
                 padding=10,
                 content=ft.Column([
                     ft.Text(f"Añadir {nombre}", size=18, weight="bold"),
                     ft.Text(f"Base: {base}", size=12, color="white60"),
                     ft.Divider(height=10, color="transparent"),
-                    
+
                     # Selector de Gramos
                     ft.Row([
                         ft.Column([
@@ -131,9 +129,9 @@ def RegistroView(page: ft.Page):
                         ], horizontal_alignment="center"),
                         ft.Text("g", size=20, weight="bold")
                     ], alignment="center", spacing=10),
-                    
+
                     ft.Divider(height=20, color="transparent"),
-                    
+
                     # Info Nutricional con colores
                     ft.Text(f"Calorías: {round(cal_val,2)} kcal", color="#6ee7b7", weight="bold", size=16),
                     ft.Row([
@@ -141,9 +139,9 @@ def RegistroView(page: ft.Page):
                         ft.Text(f"C: {round(carbos_val,2)}g", color="#4fc3f7", weight="bold"),
                         ft.Text(f"G: {round(grasas_val,2)}g", color="#ffd54f", weight="bold"),
                     ], alignment="spaceBetween"),
-                    
+
                     ft.Divider(height=10, color="transparent"),
-                    
+
                     # Botones
                     ft.Row([
                         ft.TextButton("Cancelar", on_click=lambda _: setattr(page.dialog, "open", False) or page.update()),
@@ -162,11 +160,67 @@ def RegistroView(page: ft.Page):
         page.update()
 
     def thread_buscar():
-        estado["lista_cache"] = api_alimentos.buscar_alimento(search_input.value)
+        # Enriquecer query con preferencias del perfil (si existen)
+        try:
+            perfil = db.child("usuarios").child(user_id).child("perfil").get().val() or {}
+            prefs = perfil.get("preferencias", {}) or {}
+        except Exception:
+            prefs = {}
+
+        q = search_input.value or ""
+        pref_map = {
+            "vegetariano": "vegetariano",
+            "vegano": "vegano",
+            "pescatariano": "pescatariano",
+            "sin_lactosa": "sin lactosa",
+            "sin_gluten": "sin gluten",
+            "sin_frutos_secos": "sin frutos secos",
+            "bajo_sodio": "bajo sodio",
+            "bajo_azucar": "bajo en azúcar",
+            "alta_proteina": "alta proteína"
+        }
+        for k, v in prefs.items():
+            if v and k in pref_map:
+                q = f"{q} {pref_map[k]}" if q else pref_map[k]
+
+        estado["lista_cache"] = api_alimentos.buscar_alimento(q)
         indicador_carga.visible = False
         for p in estado["lista_cache"]:
             nombre = p.get("nombre")
             desc = p.get("descripcion") # Pasamos la descripción completa
+            # Filtrado por preferencias: excluir si contradice (p. ej. vegetariano vs carne)
+            desc_l = (desc or "").lower()
+            skip = False
+            # reglas simples de exclusión
+            if prefs.get("vegetariano"):
+                for w in ["pollo","carne","res","cerdo","jamon","bacon","salchicha","pescado"]:
+                    if w in desc_l:
+                        skip = True
+                        break
+            if prefs.get("vegano"):
+                for w in ["huevo","leche","queso","miel","yogurt","mantequilla"]:
+                    if w in desc_l:
+                        skip = True
+                        break
+            if prefs.get("sin_lactosa"):
+                for w in ["leche","lacte","queso","yogurt"]:
+                    if w in desc_l:
+                        skip = True
+                        break
+            if prefs.get("sin_frutos_secos"):
+                for w in ["almendra","nuez","cacahu","pistacho","avellana"]:
+                    if w in desc_l:
+                        skip = True
+                        break
+            if prefs.get("sin_gluten"):
+                for w in ["trigo","pan","pasta","harina","galleta"]:
+                    if w in desc_l:
+                        skip = True
+                        break
+
+            if skip:
+                continue
+
             lista_resultados.controls.append(
                 ft.ListTile(
                     title=ft.Text(nombre, weight="bold"),
@@ -182,7 +236,8 @@ def RegistroView(page: ft.Page):
 
     # --- El resto del Layout del RegistroView se mantiene igual ---
     search_input = ft.TextField(label="Buscar alimento...", expand=True)
-    lista_resultados = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
+    # No usar ListView/scroll interno aquí: dejar que el contenedor padre gestione el scroll
+    lista_resultados = ft.Column()
     indicador_carga = ft.ProgressRing(visible=False)
 
     def ejecutar_busqueda(e):

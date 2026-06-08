@@ -9,6 +9,8 @@ def crear_navbar(page: ft.Page, selected_index=0):
         elif idx == 1:
             page.go("/registro")  
         elif idx == 2:
+            page.go("/plan")
+        elif idx == 3:
             page.go("/perfil")
         page.update()
 
@@ -19,6 +21,7 @@ def crear_navbar(page: ft.Page, selected_index=0):
         destinations=[
             ft.NavigationDestination(icon=ft.icons.HOME_ROUNDED, label="Inicio"),
             ft.NavigationDestination(icon=ft.icons.FASTFOOD_ROUNDED, label="Registrar"),
+            ft.NavigationDestination(icon=ft.icons.LIST_ALT_ROUNDED, label="Plan"),
             ft.NavigationDestination(icon=ft.icons.ACCOUNT_CIRCLE_ROUNDED, label="Perfil"),
         ]
     )
